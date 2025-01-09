@@ -1,0 +1,13 @@
+media:
+  base-dir: /home/spartan/media  # 指定媒体文件目录
+server:
+  port: 8080               # 设置服务端口
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
