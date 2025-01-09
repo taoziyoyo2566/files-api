@@ -2,11 +2,9 @@ package com.taoziyoyo.files.controller;
 
 import com.taoziyoyo.files.model.MediaFile;
 import com.taoziyoyo.files.service.MediaService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +18,7 @@ public class MediaController {
         this.mediaService = mediaService;
     }
 
+//    @CrossOrigin(origins = "http://91.230.73.51:8080")
     @GetMapping("/media/list")
     public Map<String, Object> listMediaFiles() {
         List<MediaFile> mediaFiles = mediaService.getMediaFiles();

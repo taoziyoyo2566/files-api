@@ -1,4 +1,5 @@
 package com.taoziyoyo.files.config;
+
 import java.io.IOException;
 import java.io.InputStream;
 import org.apache.tika.Tika;
@@ -22,14 +23,11 @@ public class MyTikaConfig {
 
     @Bean
     public Tika tika() throws TikaException, IOException, SAXException {
-
         Resource resource = resourceLoader.getResource("classpath:tika-config.xml");
         InputStream inputStream = resource.getInputStream();
-
         TikaConfig config = new TikaConfig(inputStream);
         Detector detector = config.getDetector();
         Parser autoDetectParser = new AutoDetectParser(config);
-
         return new Tika(detector, autoDetectParser);
     }
 }
