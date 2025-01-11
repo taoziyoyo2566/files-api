@@ -1,0 +1,44 @@
+{
+  "code": 200,
+  "count": "2",
+  "message": "success",
+  "data": [
+    {
+      "id": "lectures/video1.mp4",
+      "filename": "video1.mp4",
+      "path": "/api/media/stream/lectures/video1.mp4",
+      "type": "video",
+      "size": 1572864000,
+      "lastModified": 1707451235000,
+      "subtitlePath": "/api/media/subtitle/lectures/video1.srt",
+      "relativePath": "lectures/video1.mp4",
+      "hasSubtitle": true,
+      "metadata": {
+        "duration": 3600000,
+        "format": "mp4",
+        "codec": "h264",
+        "width": 1920,
+        "height": 1080,
+        "bitrate": 8500000,
+        "resolution": "1920x1080"
+      }
+    },
+    {
+      "id": "music/audio1.mp3",
+      "filename": "audio1.mp3",
+      "path": "/api/media/stream/music/audio1.mp3",
+      "type": "audio",
+      "size": 8388608,
+      "lastModified": 1707451235000,
+      "subtitlePath": null,
+      "relativePath": "music/audio1.mp3",
+      "hasSubtitle": false,
+      "metadata": {
+        "duration": 180000,
+        "format": "mp3",
+        "codec": "mp3",
+        "bitrate": 320000
+      }
+    }
+  ]
+}

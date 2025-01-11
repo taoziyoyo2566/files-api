@@ -1,7 +1,33 @@
-media:
-  base-dir: /home/spartan/media  # 指定媒体文件目录
+# application.yml
 server:
-  port: 8080               # 设置服务端口
+  port: 8080
+  servlet:
+    context-path: /api
+
+media:
+  root-path: /home/spartan/media
+  supported-video-types:
+    - .mp4
+    - .webm
+    - .mkv
+  supported-audio-types:
+    - .mp3
+    - .wav
+    - .flac
+  supported-subtitle-types:
+    - .srt
+    - .vtt
+  max-depth: 3
+  max-file-size: 2147483648 # 2GB
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 2GB
+      max-request-size: 2GB
+  web:
+    resources:
+      add-mappings: false
 
 management:
   endpoints:
@@ -11,3 +37,7 @@ management:
   endpoint:
     health:
       show-details: always
+
+logging:
+  level:
+    root: debug
