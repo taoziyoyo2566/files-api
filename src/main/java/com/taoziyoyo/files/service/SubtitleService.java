@@ -2,162 +2,121 @@ package com.taoziyoyo.files.service;
 
 import com.taoziyoyo.files.config.MediaProperties;
 import com.taoziyoyo.files.exception.MediaException;
-import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
+import java.nio.file.Paths;
+import java.util.Optional;
+import java.util.stream.Stream;
 
 @Service
-@RequiredArgsConstructor
 public class SubtitleService {
-
     private static final Logger logger = LoggerFactory.getLogger(SubtitleService.class);
+
+    private final ResourceLoader resourceLoader;
     private final MediaProperties mediaProperties;
 
-    private static final Pattern TIME_PATTERN =
-            Pattern.compile("(\\d{2}:){1,2}\\d{2},\\d{3} --> (\\d{2}:){1,2}\\d{2},\\d{3}");
+    public SubtitleService(ResourceLoader resourceLoader, MediaProperties mediaProperties) {
+        this.resourceLoader = resourceLoader;
+        this.mediaProperties = mediaProperties;
+    }
 
     /**
-     * 查找匹配的字幕文件
+     * Find subtitle file path for a given media file
+     * @param mediaPath The path of the media file
+     * @param rootDir The root directory path
+     * @return Optional containing the relative subtitle path if found, empty otherwise
      */
-    public String findSubtitlePath(Path mediaPath, Path rootDir) {
-        logger.debug("查找匹配的字幕文件: {}", "findSubtitlePath");
+    public Optional<String> findSubtitlePath(Path mediaPath, Path rootDir) {
         try {
-            String filename = mediaPath.getFileName().toString();
-            String baseName = filename.substring(0, filename.lastIndexOf('.'));
-            Path parentDir = mediaPath.getParent();
-            logger.debug("fileName: {}",filename);
-            logger.debug("baseName: {}",baseName);
-            logger.debug("parentDir: {}",parentDir);
-            logger.debug("mediaPath: {}",mediaPath.toString());
-            if (parentDir == null || !Files.exists(parentDir)) {
-                return null;
+            // 1. First check in the same directory
+            Optional<String> sameDir = findSubtitleInDirectory(mediaPath.getParent(), getBaseFileName(mediaPath), rootDir);
+            if (sameDir.isPresent()) {
+                return sameDir;
             }
 
-            // 遍历目录查找匹配的字幕文件
-            try (var files = Files.list(parentDir)) {
-                return files
-                        .filter(Files::isRegularFile)
-                        .filter(this::isSubtitleFile)
-                        .filter(path -> {
-                            String name = path.getFileName().toString();
-                            return name.startsWith(baseName) ||
-                                    name.startsWith(baseName.toLowerCase());
-                        })
-                        .findFirst()
-                        .map(path -> rootDir.relativize(path).toString())
-                        .orElse(null);
+            logger.info("mediaPath.getParent(): {}",mediaPath.getParent());
+            // 2. Check in a "subtitle" subdirectory if it exists
+            Path subtitleDir = mediaPath.getParent().resolve("subtitle");
+            if (Files.exists(subtitleDir) && Files.isDirectory(subtitleDir)) {
+                Optional<String> inSubtitleDir = findSubtitleInDirectory(subtitleDir, getBaseFileName(mediaPath), rootDir);
+                if (inSubtitleDir.isPresent()) {
+                    return inSubtitleDir;
+                }
             }
+
+            // 3. Check in root/subtitle directory
+            Path rootSubtitleDir = rootDir.resolve("subtitle");
+            if (Files.exists(rootSubtitleDir) && Files.isDirectory(rootSubtitleDir)) {
+                return findSubtitleInDirectory(rootSubtitleDir, getBaseFileName(mediaPath), rootDir);
+            }
+
+            return Optional.empty();
         } catch (IOException e) {
-            logger.warn("Error finding subtitle for media: {}", mediaPath, e);
-            return null;
+            logger.warn("Error finding subtitle for: {}", mediaPath, e);
+            return Optional.empty();
+        }
+    }
+
+    private String getBaseFileName(Path mediaPath) {
+        String filename = mediaPath.getFileName().toString();
+        // Handle filenames with multiple dots
+        int lastDotIndex = filename.lastIndexOf('.');
+        return lastDotIndex > 0 ? filename.substring(0, lastDotIndex) : filename;
+    }
+
+    private Optional<String> findSubtitleInDirectory(Path directory, String baseFileName, Path rootDir) throws IOException {
+        try (Stream<Path> paths = Files.list(directory)) {
+            return paths
+                    .filter(Files::isRegularFile)
+                    .filter(path -> {
+                        String name = path.getFileName().toString().toLowerCase();
+                        String baseName = baseFileName.toLowerCase();
+                        // Check if the subtitle file starts with the media file name
+                        // Also check for exact match without extension
+                        return (name.startsWith(baseName) || getBaseFileName(path).equalsIgnoreCase(baseFileName)) &&
+                                mediaProperties.getSupportedSubtitleTypes().stream()
+                                        .anyMatch(name::endsWith);
+                    })
+                    .findFirst()
+                    .map(path -> "/api/media/subtitle/" + rootDir.relativize(path));
         }
     }
 
     /**
-     * 判断是否为字幕文件
+     * Get subtitle file as a Resource
+     * @param filename The relative path of the subtitle file
+     * @return Resource containing the subtitle file
+     * @throws IOException if the file cannot be accessed
      */
-    private boolean isSubtitleFile(Path path) {
-        String filename = path.getFileName().toString().toLowerCase();
-        logger.debug("filename: {}",filename);
-        logger.debug("isSubtitleFile: {}",mediaProperties.getSupportedSubtitleTypes().stream()
-                .anyMatch(filename::endsWith));
-        return mediaProperties.getSupportedSubtitleTypes().stream()
-                .anyMatch(filename::endsWith);
-    }
+    public Resource getSubtitle(String filename) throws IOException {
+        Path subtitlePath = Paths.get(mediaProperties.getRootPath(), filename);
 
-    /**
-     * 解析SRT格式字幕文件
-     */
-    public List<SubtitleEntry> parseSrtFile(Path subtitlePath) {
         if (!Files.exists(subtitlePath)) {
-            throw new MediaException("Subtitle file not found: " + subtitlePath);
+            throw new MediaException("Subtitle file not found: " + filename);
         }
 
-        List<SubtitleEntry> subtitles = new ArrayList<>();
-        try (BufferedReader reader = Files.newBufferedReader(subtitlePath, StandardCharsets.UTF_8)) {
-            String line;
-            SubtitleEntry currentEntry = null;
-            StringBuilder textBuilder = new StringBuilder();
-
-            while ((line = reader.readLine()) != null) {
-                line = line.trim();
-
-                if (line.isEmpty()) {
-                    if (currentEntry != null && textBuilder.length() > 0) {
-                        currentEntry.setText(textBuilder.toString().trim());
-                        subtitles.add(currentEntry);
-                        currentEntry = null;
-                        textBuilder.setLength(0);
-                    }
-                    continue;
-                }
-
-                if (currentEntry == null) {
-                    currentEntry = new SubtitleEntry();
-                    continue;
-                }
-
-                Matcher matcher = TIME_PATTERN.matcher(line);
-                if (matcher.matches()) {
-                    String[] times = line.split(" --> ");
-                    currentEntry.setStartTime(parseTime(times[0]));
-                    currentEntry.setEndTime(parseTime(times[1]));
-                } else {
-                    if (textBuilder.length() > 0) {
-                        textBuilder.append("\n");
-                    }
-                    textBuilder.append(line);
-                }
-            }
-
-            // 处理最后一个字幕条目
-            if (currentEntry != null && textBuilder.length() > 0) {
-                currentEntry.setText(textBuilder.toString().trim());
-                subtitles.add(currentEntry);
-            }
-
-        } catch (IOException e) {
-            throw new MediaException("Failed to parse subtitle file: " + subtitlePath, e);
+        String extension = filename.substring(filename.lastIndexOf('.')).toLowerCase();
+        if (!mediaProperties.getSupportedSubtitleTypes().contains(extension)) {
+            throw new MediaException("Unsupported subtitle format: " + extension);
         }
 
-        return subtitles;
+        return resourceLoader.getResource("file:" + subtitlePath);
     }
 
     /**
-     * 解析时间字符串为毫秒值
+     * Check if a subtitle file exists for the given media file
+     * @param mediaPath The path of the media file
+     * @param rootDir The root directory path
+     * @return true if a subtitle file exists, false otherwise
      */
-    private long parseTime(String timeStr) {
-        // 标准化时间格式
-        if (timeStr.length() == 9) { // MM:SS,mmm
-            timeStr = "00:" + timeStr;
-        }
-        timeStr = timeStr.replace(',', '.');
-
-        LocalTime time = LocalTime.parse(timeStr,
-                DateTimeFormatter.ofPattern("HH:mm:ss.SSS"));
-
-        return time.toNanoOfDay() / 1_000_000; // 转换为毫秒
-    }
-
-    @lombok.Data
-    public static class SubtitleEntry {
-        private int index;
-        private long startTime; // 毫秒
-        private long endTime;   // 毫秒
-        private String text;
+    public boolean hasSubtitleFile(Path mediaPath, Path rootDir) {
+        return findSubtitlePath(mediaPath, rootDir).isPresent();
     }
 }

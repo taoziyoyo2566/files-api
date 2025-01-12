@@ -16,6 +16,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Stream;
 import java.nio.file.attribute.*;
 import org.slf4j.Logger;
@@ -60,6 +61,9 @@ public class MediaService {
         String filename = path.getFileName().toString();
         String relativePath = rootDir.relativize(path).toString();
         logger.debug("relativePath: {}",relativePath);
+        Optional<String> subtitlePathOpt = subtitleService.findSubtitlePath(path, rootDir);
+        boolean hasSubtitle = subtitlePathOpt.isPresent();
+
         return MediaFile.builder()
                 .id(relativePath)
                 .filename(filename)
@@ -67,7 +71,9 @@ public class MediaService {
                 .type(MediaTypeUtils.getMediaType(filename))
                 .size(attrs.size())
                 .lastModified(attrs.lastModifiedTime().toMillis())
-                .subtitlePath(subtitleService.findSubtitlePath(path, rootDir))
+//                .subtitlePath(subtitleService.findSubtitlePath(path, rootDir))
+                .subtitlePath(subtitlePathOpt.orElse(null))
+                .hasSubtitle(hasSubtitle)
                 .relativePath(relativePath)
                 .metadata(MediaTypeUtils.extractMetadata(path))
                 .build();
