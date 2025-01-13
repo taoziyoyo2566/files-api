@@ -5,12 +5,17 @@ import com.taoziyoyo.files.exception.MediaException;
 import com.taoziyoyo.files.model.MediaFile;
 import com.taoziyoyo.files.model.MediaTypeUtils;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.core.io.support.ResourceRegion;
 import org.springframework.http.HttpRange;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+
+import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -20,9 +25,13 @@ import java.util.Optional;
 import java.util.stream.Stream;
 import java.nio.file.attribute.*;
 import org.slf4j.Logger;
+import org.springframework.web.server.ResponseStatusException;
+
+import javax.print.attribute.standard.Media;
 
 @Service
 public class MediaService {
+
     private static final Logger logger = LoggerFactory.getLogger(MediaService.class);
     private final ResourceLoader resourceLoader;
     private  final SubtitleService subtitleService;
@@ -45,6 +54,7 @@ public class MediaService {
                     .forEach(path -> {
                         try {
                             MediaFile mediaFile = createMediaFileObject(path, rootDir);
+                            logger.info("mediaFile: {}",mediaFile);
                             mediaFiles.add(mediaFile);
                         } catch (Exception e) {
                             logger.error("Error processing file: " + path, e);
@@ -60,14 +70,14 @@ public class MediaService {
         BasicFileAttributes attrs = Files.readAttributes(path, BasicFileAttributes.class);
         String filename = path.getFileName().toString();
         String relativePath = rootDir.relativize(path).toString();
-        logger.debug("relativePath: {}",relativePath);
+        logger.info("relativePath: {}",relativePath);
         Optional<String> subtitlePathOpt = subtitleService.findSubtitlePath(path, rootDir);
         boolean hasSubtitle = subtitlePathOpt.isPresent();
 
         return MediaFile.builder()
                 .id(relativePath)
                 .filename(filename)
-                .path("/api/media/stream/" + relativePath)
+                .path("/api/media/" + relativePath)
                 .type(MediaTypeUtils.getMediaType(filename))
                 .size(attrs.size())
                 .lastModified(attrs.lastModifiedTime().toMillis())
@@ -81,9 +91,12 @@ public class MediaService {
 
     public ResourceRegion getMediaRegion(String filename, HttpRange range) throws IOException {
         Path mediaPath = Paths.get(mediaProperties.getRootPath(), filename);
-        Resource media = resourceLoader.getResource("file:" + mediaPath);
-        long contentLength = media.contentLength();
+        logger.info("mediaPath: {}",mediaPath);
 
+        Resource media = resourceLoader.getResource("file:" + mediaPath);
+
+        long contentLength = media.contentLength();
+        logger.info("contentLength: {}",contentLength);
         long start = range != null ? range.getRangeStart(contentLength) : 0;
         long end = range != null ? range.getRangeEnd(contentLength) : contentLength - 1;
         long rangeLength = Math.min(1024 * 1024, end - start + 1);
@@ -132,5 +145,30 @@ public class MediaService {
      */
     private boolean hasSubtitleFile(Path mediaPath, Path rootDir) {
         return findSubtitlePath(mediaPath, rootDir) != null;
+    }
+
+    public Resource getMediaResource(String filename) {
+        try {
+            Path mediaPath = Paths.get(mediaProperties.getRootPath()+"/stream", filename);
+            logger.info("mediaPath: {}",mediaPath);
+            Path rootDir = Paths.get(mediaProperties.getRootPath());
+            logger.info("rootDir: {}",rootDir);
+
+            Resource resource = new FileSystemResource(mediaPath);
+
+            if (resource.exists() && resource.isReadable()) {
+                return resource;
+            } else {
+                throw new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Media file not found"
+                );
+            }
+        } catch (Exception e) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid media file path"
+            );
+        }
     }
 }

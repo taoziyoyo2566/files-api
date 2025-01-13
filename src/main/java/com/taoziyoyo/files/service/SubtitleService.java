@@ -1,7 +1,12 @@
 package com.taoziyoyo.files.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.taoziyoyo.files.config.MediaProperties;
 import com.taoziyoyo.files.exception.MediaException;
+import com.taoziyoyo.files.model.Subtitle;
+import com.taoziyoyo.files.model.SubtitleEntry;
+import com.taoziyoyo.files.utils.SrtSubtitleReader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
@@ -12,6 +17,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 
@@ -22,9 +29,12 @@ public class SubtitleService {
     private final ResourceLoader resourceLoader;
     private final MediaProperties mediaProperties;
 
-    public SubtitleService(ResourceLoader resourceLoader, MediaProperties mediaProperties) {
+    private final ObjectMapper objectMapper;
+
+    public SubtitleService(ResourceLoader resourceLoader, MediaProperties mediaProperties, ObjectMapper objectMapper) {
         this.resourceLoader = resourceLoader;
         this.mediaProperties = mediaProperties;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -41,7 +51,7 @@ public class SubtitleService {
                 return sameDir;
             }
 
-            logger.info("mediaPath.getParent(): {}",mediaPath.getParent());
+            logger.info("mediaPath.getParent(): {}", mediaPath.getParent());
             // 2. Check in a "subtitle" subdirectory if it exists
             Path subtitleDir = mediaPath.getParent().resolve("subtitle");
             if (Files.exists(subtitleDir) && Files.isDirectory(subtitleDir)) {
@@ -85,7 +95,7 @@ public class SubtitleService {
                                         .anyMatch(name::endsWith);
                     })
                     .findFirst()
-                    .map(path -> "/api/media/subtitle/" + rootDir.relativize(path));
+                    .map(path -> "/api/media/" + rootDir.relativize(path));
         }
     }
 
@@ -110,6 +120,13 @@ public class SubtitleService {
         return resourceLoader.getResource("file:" + subtitlePath);
     }
 
+    public List<SubtitleEntry> getSubtitleSrt(String filename) throws IOException {
+        SrtSubtitleReader reader = new SrtSubtitleReader(mediaProperties, resourceLoader);
+        logger.info("SrtSubtitleReader: {}", reader);
+        logger.info("filename: {}", filename);
+        return reader.getSubtitle(filename);
+    }
+
     /**
      * Check if a subtitle file exists for the given media file
      * @param mediaPath The path of the media file
@@ -118,5 +135,26 @@ public class SubtitleService {
      */
     public boolean hasSubtitleFile(Path mediaPath, Path rootDir) {
         return findSubtitlePath(mediaPath, rootDir).isPresent();
+    }
+
+    public List<Subtitle> getSubtitles(String filename) {
+
+        Path subtitlePath = Paths.get(mediaProperties.getRootPath().concat("/subtitle"), filename);
+        logger.info("subtitlePath: {}", subtitlePath);
+
+        try {
+            if (!Files.exists(subtitlePath)) {
+                return Collections.emptyList();
+            }
+            logger.info("subtitlePath: {}", "23232323");
+            return objectMapper.readValue(
+                    subtitlePath.toFile(),
+                    new TypeReference<>() {
+                    }
+            );
+        } catch (IOException e) {
+            logger.error("Failed to read subtitle file: {}", subtitlePath, e);
+            throw new RuntimeException("Failed to read subtitle file", e);
+        }
     }
 }
