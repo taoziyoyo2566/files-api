@@ -1,0 +1,36 @@
+# application.yml
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+media:
+  root-path: /home/media
+  supported-video-types:
+    - .mp4
+    - .webm
+    - .mkv
+  supported-audio-types:
+    - .mp3
+    - .wav
+    - .flac
+  supported-subtitle-types:
+    - .srt
+    - .vtt
+  max-depth: 3
+  max-file-size: 2147483648 # 2GB
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 2GB
+      max-request-size: 2GB
+  web:
+    resources:
+      add-mappings: false
+logging:
+  level:
+    root: debug
+  file:
+    name: files-restful.log
+

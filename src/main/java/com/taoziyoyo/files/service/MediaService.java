@@ -13,9 +13,7 @@ import org.springframework.http.HttpRange;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
-import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -26,8 +24,6 @@ import java.util.stream.Stream;
 import java.nio.file.attribute.*;
 import org.slf4j.Logger;
 import org.springframework.web.server.ResponseStatusException;
-
-import javax.print.attribute.standard.Media;
 
 @Service
 public class MediaService {

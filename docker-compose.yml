@@ -1,0 +1,38 @@
+services:
+  node-info:
+    container_name: media-files-${TAG:-latest}
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        VERSION: ${TAG:-latest}  # 传递版本号
+    image: media-files:${TAG:-latest}  # 使用TAG环境变量指定版本
+    ports:
+      - "65.75.209.82:1090:8080"
+    environment:
+      - SERVER_PORT=8080
+    volumes:
+      - /home/spartan/media:/home/media:ro
+      - /home/logs/media-files:/home/logs
+    labels:
+      key: "taoziyoyo"
+    deploy:
+      resources:
+        limits:
+          memory: 1024m
+          cpus: '2.0'
+        reservations:
+          memory: 256m
+          cpus: '1'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
